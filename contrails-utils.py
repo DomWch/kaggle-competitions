@@ -241,6 +241,14 @@ class Visualization:
         plt.show()
 
     def plot_anim(record_id, path=TrainPath, pseudo_label_path=PseudoPathDefault):
+        record_path = path / f"{record_id}"
+        if not record_path.exists():
+            print(f"{record_path} not found")
+            list_close_path = list(path.glob(f"*{str(record_id)[0:-5]}*"))
+            if len(list_close_path) == 0:
+                return ""
+            record_path = list_close_path[0]
+            print(f"{record_id} not found but {record_path.name} match")
         # target mask vs images
         images, human_mask = Load.open_record_all_sequence(path / f"{record_id}")
         plt.figure(figsize=(20, 30))
@@ -253,7 +261,8 @@ class Visualization:
         plt.show()
 
         # plot pseudo label
-        Visualization.plot_label_sequence(record_id, pseudo_label_path)
+        if (pseudo_label_path / str(record_id)).exists():
+            Visualization.plot_label_sequence(record_id, pseudo_label_path)
 
         # animation images
         fig = plt.figure(figsize=(15, 15))
