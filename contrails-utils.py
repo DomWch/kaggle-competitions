@@ -1,4 +1,5 @@
 # %% [code]
+# %% [code]
 import sys
 
 sys.path.append("../input/pretrained-models-pytorch")
@@ -250,7 +251,7 @@ class Visualization:
             record_path = list_close_path[0]
             print(f"{record_id} not found but {record_path.name} match")
         # target mask vs images
-        images, human_mask = Load.open_record_all_sequence(path / f"{record_id}")
+        images, human_mask = Load.open_record_all_sequence(record_path)
         plt.figure(figsize=(20, 30))
         ax1 = plt.subplot(1, 2, 1)
         ax1.title.set_text("pixel mask")
@@ -597,7 +598,7 @@ class PyLModel:
                     current_mask = predicted_mask[img_num, :, :, :]
                     current_image_id = image_id[img_num].item()
                     model_preds[current_image_id] = current_mask
-            all_preds[f"f{i}"] = model_preds
+            all_preds[f"{model_path.stem}"] = model_preds
 
             del model
             torch.cuda.empty_cache()
@@ -615,7 +616,7 @@ class PyLModel:
         predicted_mask_with_threshold[predicted_mask[0, :, :] > threshold] = 1
         return predicted_mask_with_threshold
 
-    def double_thresholds(image, high_threshold, low_threshold):
+    def double_thresholds(image, low_threshold, high_threshold):
         image = torch.from_numpy(image)
         X = image > high_threshold
         Y = (image > low_threshold) & (image <= high_threshold)
@@ -637,17 +638,21 @@ class PyLModel:
         low_threshold: float,
         models_len: int,
         vote_majority: float = 0.45,
+        model_importance:dict[str:int]={},
+        model_individual_threshold:dict[str,tuple[float,float]]={},
     ):
         # apply dual threshold before stacking, so models can have différent threshold and its a vote system more like human_individual_masks -> human_pixel_masks
         predicted_mask = sum(
             [
-                PyLModel.double_thresholds(
+                model_importance.get(model_name,1) * PyLModel.double_thresholds(
                     preds[index],
-                    high_threshold=high_threshold,
-                    low_threshold=low_threshold,
+                    low_threshold=model_individual_threshold.get(model_name,(low_threshold,high_threshold))[0],
+                    high_threshold=model_individual_threshold.get(model_name,(low_threshold,high_threshold))[1]
+
                 )
-                for preds in all_preds.values()
+                for model_name, preds in all_preds.items()
             ]
         )
-        predicted_mask = predicted_mask > (models_len * vote_majority)
+        votes_len = sum(model_importance.values()) - len(model_importance.values())
+        predicted_mask = predicted_mask > (votes_len * vote_majority)
         return predicted_mask
